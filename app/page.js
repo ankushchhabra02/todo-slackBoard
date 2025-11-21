@@ -2,7 +2,7 @@
 import SummaryCards from "@/components/summary";
 import TaskStatusSummary from "@/components/Task";
 import { useEffect, useState } from "react";
-
+import { getSocket } from "@/utils/socket";
 async function fetchData(endpoint) {
   const res = await fetch(`http://localhost:3000/dashboard/${endpoint}`, {
     cache: "no-store",
@@ -20,24 +20,43 @@ export default function DashboardPage() {
   const [openWorkspace, setOpenWorkspace] = useState(null);
 
   useEffect(() => {
-    (async () => {
+    async function loadAll() {
       const t = await fetchData("teams");
       const m = await fetchData("members");
       const ta = await fetchData("tasks");
       const w = await fetchData("workspaces");
-
-      // remove raw oauth object
+  
       const cleaned = w.map((x) => {
         const { raw_oauth, ...rest } = x;
         return rest;
       });
-
+  
       setTeams(t);
       setMembers(m);
       setTasks(ta);
       setWorkspaces(cleaned);
-    })();
+    }
+  
+    // Initial load
+    loadAll();
+  
+    // Connect socket
+    const socket = getSocket();
+  
+    // 🔥 Refresh when backend notifies
+    socket.on("teamsUpdated", loadAll);
+    socket.on("membersUpdated", loadAll);
+    socket.on("tasksUpdated", loadAll);
+    socket.on("workspacesUpdated", loadAll); // optional
+  
+    return () => {
+      socket.off("teamsUpdated", loadAll);
+      socket.off("membersUpdated", loadAll);
+      socket.off("tasksUpdated", loadAll);
+      socket.off("workspacesUpdated", loadAll);
+    };
   }, []);
+  
 
   return (
     <div className="p-10 space-y-10 bg-gray-200">
